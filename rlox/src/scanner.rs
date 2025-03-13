@@ -43,10 +43,8 @@ impl <'a> Scanner<'a> {
             '+' => self.add_token(TokenType::Plus),
             ';' => self.add_token(TokenType::Semicolon),
             '*' => self.add_token(TokenType::Star),
-            c if c.is_alphabetic()  => self.add_token(TokenType::String),
-            d if d.is_numeric() => self.add_token(TokenType::Number),
+            ' ' | '\r' | '\t' => (), // ignore whitespace
             '\n' => self.line += 1,
-            ' ' => (), // ignore whitespace
             c if c == '!' || c == '=' || c == '<' || c == '>' => {
                 if self.advance_on_match('=') {
                     let token_type = match c {
@@ -57,15 +55,86 @@ impl <'a> Scanner<'a> {
                          x => unreachable!("Unexpected char: {x}"),
                     };
                     self.add_token(token_type);
+                    return Ok(());
                 }
                 let x = self.advance();
                 return Err(RloxError::InvalidInput(format!("Unexpected character '{x}' after '{c}'")).into());
-            }
+            },
+            '/' => {
+                if self.advance_on_match('/') {
+                    while self.peek() != '\n' && !self.is_at_end() {
+                        self.advance();
+                    }
+                } else {
+                    self.add_token(TokenType::Slash);
+                }
+            },
+            '"' => self.handle_string(),
+            d if d.is_digit(10) => self.handle_number(),
+            c if c.is_alphabetic() => self.handle_identifier(),
             e => {
                 eprintln!("Unexpected character: {}", e);
             }
         }
         Ok(())
+    }
+
+    fn handle_number(&mut self) {
+        while self.peek().is_digit(10) {
+            self.advance();
+        }
+
+        if self.peek() == '.' && self.peek_next().is_digit(10) {
+            self.advance();
+            while self.peek().is_digit(10) {
+                self.advance();
+            }
+        }
+
+        if self.peek() == '.' {
+            eprintln!("Invalid number format");
+            return;
+        }
+
+        let literal = self.source[self.start .. self.current].parse().expect("Failed to parse number");
+        self.add_token(TokenType::Number(literal));
+    }
+
+    fn peek_next(&self) -> char {
+        if self.current + 1 >= self.source.len() {
+            return '\0';
+        }
+        self.source[self.current + 1 .. self.current + 2].chars().nth(0).unwrap()
+    }
+
+    fn handle_identifier(&mut self) {
+
+    }
+
+    fn handle_string(&mut self) {
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() == '\n' {
+                self.line += 1;
+            }
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            eprintln!("Unterminated string.");
+            return;
+        }
+
+        self.advance();
+
+        let literal = self.source[self.start + 1 .. self.current - 1].to_string();
+        self.add_token(TokenType::String(literal));
+    }   
+
+    fn peek(&self) -> char {
+        if self.is_at_end() {
+            return '\0';
+        }
+        self.source[self.current .. self.current + 1].chars().nth(0).unwrap()
     }
 
     fn advance(&mut self) -> char {
@@ -75,12 +144,14 @@ impl <'a> Scanner<'a> {
     }
 
     fn advance_on_match(&mut self, expected: char) -> bool {
-        if self.source[self.current .. self.current + 1].chars().nth(0).unwrap() == expected {
-            self.current += 1;
-            true
-        } else {
-            false
+        if self.is_at_end() {
+            return false;
         }
+        if self.source[self.current .. self.current + 1].chars().nth(0).unwrap() != expected {
+            return false;
+        }
+        self.current += 1;
+        true
     }
 
     fn add_token(&mut self, token_type: TokenType) {
