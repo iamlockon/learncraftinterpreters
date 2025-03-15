@@ -35,8 +35,7 @@ lazy_static! {
     };
 }
 
-impl <'a> Scanner<'a> {
-
+impl<'a> Scanner<'a> {
     pub(crate) fn new(source: &'a str) -> Self {
         Self {
             source,
@@ -93,8 +92,15 @@ impl <'a> Scanner<'a> {
                     self.add_token(token_type);
                     return Ok(());
                 }
-                let x = self.advance();
-                return Err(RloxError::InvalidInput(format!("Unexpected character '{x}' after '{c}'")).into());
+
+                let token_type = match c {
+                    '!' => TokenType::Bang,
+                    '<' => TokenType::Less,
+                    '>' => TokenType::Greater,
+                    '=' => TokenType::Equal,
+                    x => unreachable!("Unexpected char: {x}"),
+                };
+                self.add_token(token_type);
             },
             d if d.is_digit(10) => self.handle_number(),
             c if c.is_alphabetic() || c == '_' => self.handle_identifier(),
