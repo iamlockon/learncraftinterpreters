@@ -1,20 +1,46 @@
-use std::io::Error;
-
+use std::{collections::HashMap, str::Chars};
 use crate::{error::RloxError, token::Token, token_type::TokenType};
 
 #[derive(Debug)]
 pub(crate) struct Scanner<'a> {
     source: &'a str,
+    chars: std::iter::Peekable<Chars<'a>>,
     tokens: Vec<Token>,
     start: usize,
     current: usize,
     line: usize,
 }
 
+lazy_static! {
+    static ref RESERVED_WORDS: HashMap<&'static str, TokenType> = {
+        let mut m = HashMap::new();
+        m.insert("and", TokenType::And);
+        m.insert("class", TokenType::Class);
+        m.insert("else", TokenType::Else);
+        m.insert("false", TokenType::False);
+        m.insert("for", TokenType::For);
+        m.insert("fun", TokenType::Fun);
+        m.insert("if", TokenType::If);
+        m.insert("nil", TokenType::Nil);
+        m.insert("or", TokenType::Or);
+        m.insert("print", TokenType::Print);
+        m.insert("return", TokenType::Return);
+        m.insert("super", TokenType::Super);
+        m.insert("this", TokenType::This);
+        m.insert("true", TokenType::True);
+        m.insert("var", TokenType::Var);
+        m.insert("while", TokenType::While); 
+        m.insert("break", TokenType::Break);
+        m
+    };
+}
+
 impl <'a> Scanner<'a> {
+
     pub(crate) fn new(source: &'a str) -> Self {
         Self {
             source,
+            chars: source.chars().peekable(),
             tokens: Vec::new(),
             start: 0,
             current: 0,
@@ -43,8 +69,18 @@ impl <'a> Scanner<'a> {
             '+' => self.add_token(TokenType::Plus),
             ';' => self.add_token(TokenType::Semicolon),
             '*' => self.add_token(TokenType::Star),
-            ' ' | '\r' | '\t' => (), // ignore whitespace
+            ' ' | '\r' | '\t' => (), // ignore whitespace and null characters
             '\n' => self.line += 1,
+            '/' => {
+                if self.advance_on_match('/') {
+                    while self.peek() != '\n' && !self.is_at_end() {
+                        self.advance();
+                    }
+                } else {
+                    self.add_token(TokenType::Slash);
+                }
+            },
+            '"' => self.handle_string(),
             c if c == '!' || c == '=' || c == '<' || c == '>' => {
                 if self.advance_on_match('=') {
                     let token_type = match c {
@@ -60,18 +96,8 @@ impl <'a> Scanner<'a> {
                 let x = self.advance();
                 return Err(RloxError::InvalidInput(format!("Unexpected character '{x}' after '{c}'")).into());
             },
-            '/' => {
-                if self.advance_on_match('/') {
-                    while self.peek() != '\n' && !self.is_at_end() {
-                        self.advance();
-                    }
-                } else {
-                    self.add_token(TokenType::Slash);
-                }
-            },
-            '"' => self.handle_string(),
             d if d.is_digit(10) => self.handle_number(),
-            c if c.is_alphabetic() => self.handle_identifier(),
+            c if c.is_alphabetic() || c == '_' => self.handle_identifier(),
             e => {
                 eprintln!("Unexpected character: {}", e);
             }
@@ -96,19 +122,32 @@ impl <'a> Scanner<'a> {
             return;
         }
 
-        let literal = self.source[self.start .. self.current].parse().expect("Failed to parse number");
+        let literal: f64 = self.source[self.start .. self.current].parse().expect("Failed to parse number");
         self.add_token(TokenType::Number(literal));
     }
 
-    fn peek_next(&self) -> char {
-        if self.current + 1 >= self.source.len() {
+    fn peek(&mut self) -> char {
+        *self.chars.peek().unwrap_or(&'\0')
+    }
+
+    fn peek_next(&mut self) -> char {
+        if self.current + self.peek().len_utf8() >= self.source.len() {
             return '\0';
         }
-        self.source[self.current + 1 .. self.current + 2].chars().nth(0).unwrap()
+        self.source[self.current + self.peek().len_utf8()..].chars().nth(0).unwrap()
     }
 
     fn handle_identifier(&mut self) {
-
+        while self.peek().is_alphanumeric() || self.peek() == '_' {
+            self.advance();
+        }
+        let literal = &self.source[self.start .. self.current];
+        let token = if let Some(r#type) = RESERVED_WORDS.get(literal) {
+            r#type.clone()
+        } else {
+            TokenType::Identifier(literal.to_string())
+        };
+        self.add_token(token);
     }
 
     fn handle_string(&mut self) {
@@ -130,16 +169,9 @@ impl <'a> Scanner<'a> {
         self.add_token(TokenType::String(literal));
     }   
 
-    fn peek(&self) -> char {
-        if self.is_at_end() {
-            return '\0';
-        }
-        self.source[self.current .. self.current + 1].chars().nth(0).unwrap()
-    }
-
     fn advance(&mut self) -> char {
-        let c= self.source[self.current .. self.current + 1].chars().nth(0).unwrap();
-        self.current += 1;
+        let c= self.chars.next().unwrap();
+        self.current += c.len_utf8();
         c
     }
 
@@ -147,10 +179,10 @@ impl <'a> Scanner<'a> {
         if self.is_at_end() {
             return false;
         }
-        if self.source[self.current .. self.current + 1].chars().nth(0).unwrap() != expected {
+        if self.chars.peek().unwrap_or(&'\0') != &expected {
             return false;
         }
-        self.current += 1;
+        self.current += self.chars.next().unwrap().len_utf8();
         true
     }
 
@@ -158,7 +190,7 @@ impl <'a> Scanner<'a> {
         self.tokens.push(Token::new(token_type, "".to_string(), None, self.line));
     }
 
-    fn is_at_end(&self) -> bool {
-        self.current >= self.source.len()
+    fn is_at_end(&mut self) -> bool {
+        self.chars.peek().is_none()
     }
 }

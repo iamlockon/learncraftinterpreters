@@ -24,7 +24,7 @@ pub(crate) enum TokenType {
     LessEqual,
     
     // Literals
-    Identifier,
+    Identifier(String),
     String(String),
     Number(f64),
     
@@ -45,6 +45,7 @@ pub(crate) enum TokenType {
     True,
     Var,
     While,
+    Break,
     
     EOF,
 }

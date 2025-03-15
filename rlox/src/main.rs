@@ -7,6 +7,9 @@ mod error;
 use std::env;
 use runner::Runner;
 
+#[macro_use]
+extern crate lazy_static;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     let mut runner = Runner::new();
@@ -20,4 +23,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     Ok(())
 }
-
