@@ -4,7 +4,7 @@ var t = "abc"
 var d = 123.321
 
 if (d == 321.123) {
-    print "hey"
+    print "hey, it accepts Unicodes! 例如こんにちは"
 } else {
     while (d > 10) {
         d -= 1
@@ -12,5 +12,9 @@ if (d == 321.123) {
 }
 
 for (var i = 1; i < 4; i++) {
+    /*
+        allow c-ctyle comments which can contain
+        newlines.
+    */
     print i
 }

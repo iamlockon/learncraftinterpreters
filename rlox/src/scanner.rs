@@ -75,6 +75,19 @@ impl<'a> Scanner<'a> {
                     while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
+                } else if self.advance_on_match('*') {
+                    // c style comment
+                    while self.peek() != '*' && !self.is_at_end() {
+                        self.advance();
+                    }
+
+                    if self.peek() == '*' && self.peek_next() == '/' {
+                        self.advance();
+                        self.advance();
+                    } else {
+                        eprintln!("Unterminated comment.");
+                        return Ok(());
+                    }
                 } else {
                     self.add_token(TokenType::Slash);
                 }
